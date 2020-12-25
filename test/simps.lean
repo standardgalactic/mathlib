@@ -629,7 +629,7 @@ initialize_simps_projections equiv (to_fun → apply, inv_fun → symm_apply)
 run_cmd do
   e ← get_env,
   data ← simps_get_raw_projections e `manual_projection_names.equiv,
-  guard $ data.2.map prod.fst = [`apply, `symm_apply]
+  guard $ data.2.map (prod.fst ∘ prod.fst) = [`apply, `symm_apply]
 
 @[simps {simp_rhs := tt}] protected def equiv.trans (e₁ : α ≃ β) (e₂ : β ≃ γ) : α ≃ γ :=
 ⟨e₂ ∘ e₁, e₁.symm ∘ e₂.symm⟩
@@ -644,9 +644,34 @@ by simp only [equiv.trans_symm_apply]
 @[simps apply symm_apply] protected def equiv.trans2 (e₁ : α ≃ β) (e₂ : β ≃ γ) : α ≃ γ :=
 ⟨e₂ ∘ e₁, e₁.symm ∘ e₂.symm⟩
 
--- initialize_simps_projections equiv
-
 end manual_projection_names
+
+namespace projection_prefixes
+
+structure equiv (α : Sort*) (β : Sort*) :=
+(to_fun    : α → β)
+(inv_fun   : β → α)
+
+local infix ` ≃ `:25 := projection_prefixes.equiv
+
+variables {α β γ : Sort*}
+
+instance : has_coe_to_fun $ α ≃ β := ⟨_, equiv.to_fun⟩
+
+initialize_simps_projections equiv (to_fun ← coe, inv_fun → symm_apply)
+
+run_cmd do
+  e ← get_env,
+  data ← simps_get_raw_projections e `projection_prefixes.equiv,
+  guard $ data.2.map prod.fst = [(`coe, tt), (`symm_apply, ff)]
+
+@[simps coe {simp_rhs := tt}] protected def equiv.trans (e₁ : α ≃ β) (e₂ : β ≃ γ) : α ≃ γ :=
+⟨e₂ ∘ e₁, e₁.inv_fun ∘ e₂.inv_fun⟩
+
+example (e₁ : α ≃ β) (e₂ : β ≃ γ) (x : α) : (e₁.trans e₂) x = e₂ (e₁ x) :=
+by simp only [equiv.trans_coe]
+
+end projection_prefixes
 
 
 -- test transparency setting

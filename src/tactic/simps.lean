@@ -39,6 +39,19 @@ declare_trace simps.verbose
 declare_trace simps.debug
 
 /--
+The information about each projection in the `@[_simps_str]` attribute. It consists of
+- A name used for printing, the definition name is represented by `{}`
+- A name used for parsing
+- A custom expression that is definitionally equal to the corresponding projection.
+  These expressions can contain the universe parameters specified in the first argument of the
+  `@[_simps_str]` attribute.
+-/
+@[derive has_reflect] meta structure simps_str_proj_info :=
+(print_nm : name)
+(parse_nm : name)
+(proj : expr)
+
+/--
 The `@[_simps_str]` attribute specifies the preferred projections of the given structure,
 used by the `@[simps]` attribute.
 - This will usually be tagged by the `@[simps]` tactic.
@@ -46,16 +59,11 @@ used by the `@[simps]` attribute.
 - To change the default value, see Note [custom simps projection].
 - You are strongly discouraged to add this attribute manually.
 - The first argument is the list of names of the universe variables used in the structure
-- The second argument is a list where the entries have the following information for each projection
-  of the structure:
-  - a custom name
-  - a boolean that specifies whether the name is written with a prefix.
-    (`tt` means written as prefix, default `ff`)
-  - an expression (definitionally equal to the corresponding projection).
-    These expressions can contain the universe parameters specified in the first argument).
+- The second argument is a list where the entries have the information in `simps_str_proj_info`
+  for each projection of the structure.
 -/
 @[user_attribute] meta def simps_str_attr :
-  user_attribute unit (list name × list ((name × bool) × expr)) :=
+  user_attribute unit (list name × list simps_str_proj_info) :=
 { name := `_simps_str,
   descr := "An attribute specifying the projection of the given structure.",
   parser := do e ← texpr, eval_pexpr _ e }
@@ -128,13 +136,12 @@ attribute [notation_class* coe_fn] has_coe_to_fun
 -- skip all classes that don't have the corresponding field.
 meta def simps_get_raw_projections (e : environment) (str : name) (trace_if_exists : bool := ff)
   (name_changes : list (name × name × bool) := []) :
-  tactic (list name × list ((name × bool) × expr)) := do
+    tactic (list name × list simps_str_proj_info) := do
   has_attr ← has_attribute' `_simps_str str,
   if has_attr then do
     data ← simps_str_attr.get_param str,
     to_print ← data.2.mmap $ λ s,
-      let is_prefix : string := if s.1.2 then " (prefix)" else "" in
-      to_string <$> pformat!"Projection {s.1.1}{is_prefix}: {s.2}",
+      to_string <$> pformat!"Projection {s.parse_nm} (printed as {s.print_nm}): {s.2}",
     let to_print := string.join $ to_print.intersperse "\n        > ",
     -- We always trace this when called by `initialize_simps_projections`,
     -- because this doesn't do anything extra (so should not occur in mathlib).
@@ -205,13 +212,12 @@ Expected type:\n  {raw_expr_type}" },
       return $ raw_exprs.update_nth pos lambda_raw_expr) <|> return raw_exprs) raw_exprs,
     proj_names ← e.structure_fields str,
     -- if we find the name in name_changes, change the name
-    let proj_names : list (name × bool) := proj_names.map $
-      λ nm, (name_changes.find $ λ p : _ × _, p.1 = nm).elim (nm, ff) (prod.snd),
-    let projs := proj_names.zip raw_exprs,
+    let proj_names : list (name × name) := proj_names.map $
+      λ nm, (name_changes.find $ λ p : _ × _, p.1 = nm).elim ("{}_" ++ nm, nm) _,
+    let projs := proj_names.zip_with _ raw_exprs,
     when_tracing `simps.verbose $ do {
       to_print ← projs.mmap $ λ s,
-        let is_prefix : string := if s.1.2 then " (prefix)" else "" in
-        to_string <$> pformat!"Projection {s.1.1}{is_prefix}: {s.2}",
+        to_string <$> pformat!"Projection {s.parse_nm} (printed as {s.print_nm}): {s.2}",
       let to_print := string.join $ to_print.intersperse "\n        > ",
       trace!"[simps] > generated projections for {str}:\n        > {to_print}" },
     simps_str_attr.set str (raw_univs, projs) tt,
