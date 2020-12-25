@@ -46,13 +46,16 @@ used by the `@[simps]` attribute.
 - To change the default value, see Note [custom simps projection].
 - You are strongly discouraged to add this attribute manually.
 - The first argument is the list of names of the universe variables used in the structure
-- The second argument is a list that consists of
-  - a custom name for each projection of the structure
-  - an expressions for each projections of the structure (definitionally equal to the
-    corresponding projection). These expressions can contain the universe parameters specified
-    in the first argument).
+- The second argument is a list where the entries have the following information for each projection
+  of the structure:
+  - a custom name
+  - a boolean that specifies whether the name is written with a prefix.
+    (`tt` means written as prefix, default `ff`)
+  - an expression (definitionally equal to the corresponding projection).
+    These expressions can contain the universe parameters specified in the first argument).
 -/
-@[user_attribute] meta def simps_str_attr : user_attribute unit (list name × list (name × expr)) :=
+@[user_attribute] meta def simps_str_attr :
+  user_attribute unit (list name × list ((name × bool) × expr)) :=
 { name := `_simps_str,
   descr := "An attribute specifying the projection of the given structure.",
   parser := do e ← texpr, eval_pexpr _ e }
@@ -61,9 +64,9 @@ used by the `@[simps]` attribute.
   The `@[notation_class]` attribute specifies that this is a notation class,
   and this notation should be used instead of projections by @[simps].
   * The first argument `tt` for notation classes and `ff` for classes applied to the structure,
-    like `has_coe_to_sort` and `has_coe_to_fun`
+    like `has_coe_to_sort` and `has_coe_to_fun`.
   * The second argument is the name of the projection (by default it is the first projection
-    of the structure)
+    of the structure).
 -/
 @[user_attribute] meta def notation_class_attr : user_attribute unit (bool × option name) :=
 { name := `notation_class,
@@ -124,11 +127,14 @@ attribute [notation_class* coe_fn] has_coe_to_fun
 -- if performance becomes a problem, possible heuristic: use the names of the projections to
 -- skip all classes that don't have the corresponding field.
 meta def simps_get_raw_projections (e : environment) (str : name) (trace_if_exists : bool := ff)
-  (name_changes : list (name × name) := []) : tactic (list name × list (name × expr)) := do
+  (name_changes : list (name × name × bool) := []) :
+  tactic (list name × list ((name × bool) × expr)) := do
   has_attr ← has_attribute' `_simps_str str,
   if has_attr then do
     data ← simps_str_attr.get_param str,
-    to_print ← data.2.mmap $ λ s, to_string <$> pformat!"Projection {s.1}: {s.2}",
+    to_print ← data.2.mmap $ λ s,
+      let is_prefix : string := if s.1.2 then " (prefix)" else "" in
+      to_string <$> pformat!"Projection {s.1.1}{is_prefix}: {s.2}",
     let to_print := string.join $ to_print.intersperse "\n        > ",
     -- We always trace this when called by `initialize_simps_projections`,
     -- because this doesn't do anything extra (so should not occur in mathlib).
@@ -199,11 +205,13 @@ Expected type:\n  {raw_expr_type}" },
       return $ raw_exprs.update_nth pos lambda_raw_expr) <|> return raw_exprs) raw_exprs,
     proj_names ← e.structure_fields str,
     -- if we find the name in name_changes, change the name
-    let proj_names : list name := proj_names.map $
-      λ nm, (name_changes.find $ λ p : _ × _, p.1 = nm).elim nm prod.snd,
+    let proj_names : list (name × bool) := proj_names.map $
+      λ nm, (name_changes.find $ λ p : _ × _, p.1 = nm).elim (nm, ff) (prod.snd),
     let projs := proj_names.zip raw_exprs,
     when_tracing `simps.verbose $ do {
-      to_print ← projs.mmap $ λ s, to_string <$> pformat!"Projection {s.1}: {s.2}",
+      to_print ← projs.mmap $ λ s,
+        let is_prefix : string := if s.1.2 then " (prefix)" else "" in
+        to_string <$> pformat!"Projection {s.1.1}{is_prefix}: {s.2}",
       let to_print := string.join $ to_print.intersperse "\n        > ",
       trace!"[simps] > generated projections for {str}:\n        > {to_print}" },
     simps_str_attr.set str (raw_univs, projs) tt,
@@ -228,6 +236,9 @@ library_note "custom simps projection"
 /-- Specify simps projections, see Note [custom simps projection].
   You can specify custom names by writing e.g.
   `initialize_simps_projections equiv (to_fun → apply, inv_fun → symm_apply)`.
+  You can use `←` to specify that the projection should be written with a prefix:
+  `initialize_simps_projections equiv (to_fun ← coe)`.
+  Prefixes are parsed
   Set `trace.simps.verbose` to true to see the generated projections.
   If the projections were already specified before, you can call `initialize_simps_projections`
   again to see the generated projections. -/
@@ -235,7 +246,10 @@ library_note "custom simps projection"
   (_ : parse $ tk "initialize_simps_projections") : parser unit := do
   env ← get_env,
   ns ← (prod.mk <$> ident <*> (tk "(" >>
-    sep_by (tk ",") (prod.mk <$> ident <*> (tk "->" >> ident)) <* tk ")")?)*,
+    sep_by (tk ",")
+      (prod.mk <$> ident <*> ((tk "->" >>
+        (λ nm, (nm, ff)) <$> ident) <|> (tk "<-" >> (λ nm, (nm, tt)) <$> ident)))
+    <* tk ")")?)*,
   ns.mmap' $ λ data, do
     nm ← resolve_constant data.1,
     simps_get_raw_projections env nm tt $ data.2.get_or_else []
@@ -252,15 +266,15 @@ library_note "custom simps projection"
 
   Example 1: ``simps_get_projection_exprs env `(α × β) `(⟨x, y⟩)`` will give the output
   ```
-    [(`(@prod.fst.{u v} α β), `fst, `prod.fst, `(x)),
-     (`(@prod.snd.{u v} α β), `snd, `prod.snd, `(y))]
+    [(`(@prod.fst.{u v} α β), (`fst, ff) `prod.fst, `(x)),
+     (`(@prod.snd.{u v} α β), (`snd, ff) `prod.snd, `(y))]
   ```
 
   Example 2: ``simps_get_projection_exprs env `(α ≃ α) `(⟨id, id, λ _, rfl, λ _, rfl⟩)``
   will give the output
   ```
-    [(`(@equiv.to_fun.{u u} α α), `apply, `equiv.to_fun, `(id)),
-     (`(@equiv.inv_fun.{u u} α α), `symm_apply, `equiv.inv_fun, `(id)),
+    [(`(@equiv.to_fun.{u u} α α), (`apply, ff) `equiv.to_fun, `(id)),
+     (`(@equiv.inv_fun.{u u} α α), (`symm_apply, ff) `equiv.inv_fun, `(id)),
      ...,
      ...]
   ```
@@ -270,7 +284,7 @@ library_note "custom simps projection"
 -- This function does not use `tactic.mk_app` or `tactic.mk_mapp`, because the the given arguments
 -- might not uniquely specify the universe levels yet.
 meta def simps_get_projection_exprs (e : environment) (tgt : expr)
-  (rhs : expr) : tactic $ list $ expr × name × name × expr := do
+  (rhs : expr) : tactic $ list $ expr × (name × bool) × name × expr := do
   let params := get_app_args tgt, -- the parameters of the structure
   (params.zip $ (get_app_args rhs).take params.length).mmap' (λ ⟨a, b⟩, is_def_eq a b)
     <|> fail "unreachable code (1)",
@@ -406,7 +420,7 @@ meta def simps_add_projections : ∀(e : environment) (nm : name) (suffix : stri
       return (rhs_ap, "" ∈ todo),
     if is_constant_of (get_app_fn rhs_ap) intro then do -- if the value is a constructor application
       tuples ← simps_get_projection_exprs e tgt rhs_ap,
-      let projs := tuples.map $ λ x, x.2.1,
+      let projs := tuples.map $ λ x, x.2.1.1,
       let pairs := tuples.map $ λ x, x.2.2,
       eta ← rhs_ap.is_eta_expansion_aux pairs, -- check whether `rhs_ap` is an eta-expansion
       let rhs_ap := eta.lhoare rhs_ap, -- eta-reduce `rhs_ap`
@@ -433,7 +447,7 @@ The known projections are:
 You can also see this information by running
   `initialize_simps_projections {str}`.
 Note: the projection names used by @[simps] might not correspond to the projection names in the structure.",
-        tuples.mmap' $ λ ⟨proj_expr, proj, _, new_rhs⟩, do
+        tuples.mmap' $ λ ⟨proj_expr, (proj, _), _, new_rhs⟩, do
           new_type ← infer_type new_rhs,
           let new_todo := todo.filter_map $ λ x, string.get_rest x $ "_" ++ proj.last,
           b ← is_prop new_type,
