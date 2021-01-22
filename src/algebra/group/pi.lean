@@ -92,16 +92,15 @@ variables (f) [Π i, monoid (f i)]
 
 /-- Evaluation of functions into an indexed collection of monoids at a point is a monoid
 homomorphism. -/
-@[to_additive "Evaluation of functions into an indexed collection of additive monoids at a point
-is an additive monoid homomorphism."]
-def monoid_hom.apply (i : I) : (Π i, f i) →* f i :=
+@[simps, to_additive "Evaluation of functions into an indexed collection of additive monoids at a
+point is an additive monoid homomorphism."]
+def pi.apply_monoid_hom (i : I) : (Π i, f i) →* f i :=
 { to_fun := λ g, g i,
   map_one' := rfl,
   map_mul' := λ x y, rfl, }
 
-@[simp, to_additive]
-lemma monoid_hom.apply_apply (i : I) (g : Π i, f i) :
-  (monoid_hom.apply f i) g = g i := rfl
+-- simps does not work with to_additive (gh-1639)
+attribute [simps] pi.apply_add_monoid_hom
 
 end monoid_hom
 

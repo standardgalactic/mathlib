@@ -56,21 +56,17 @@ protected def ring_hom
   pi.ring_hom f g a = f a g :=
 rfl
 
-end pi
-
 section ring_hom
 
-variable {I : Type*}     -- The indexing type
-variable (f : I → Type*) -- The family of types already equipped with instances
-variables [Π i, semiring (f i)]
+variables [Π i, semiring (f i)] (f)
 
 /-- Evaluation of functions into an indexed collection of monoids at a point is a monoid
 homomorphism. -/
-def ring_hom.apply (i : I) : (Π i, f i) →+* f i :=
-{ ..(monoid_hom.apply f i),
-  ..(add_monoid_hom.apply f i) }
-
-@[simp]
-lemma ring_hom.apply_apply (i : I) (g : Π i, f i) : (ring_hom.apply f i) g = g i := rfl
+@[simps]
+def apply_ring_hom (i : I) : (Π i, f i) →+* f i :=
+{ ..(apply_monoid_hom f i),
+  ..(apply_add_monoid_hom f i) }
 
 end ring_hom
+
+end pi

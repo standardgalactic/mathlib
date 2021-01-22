@@ -5,6 +5,7 @@ Authors: Simon Hudon, Patrick Massot
 -/
 import algebra.module.basic
 import algebra.ring.pi
+import algebra.module.linear_map
 
 /-!
 # Pi instances for module and multiplicative actions
@@ -89,5 +90,14 @@ instance semimodule' {g : I → Type*} {r : Π i, semiring (f i)} {m : Π i, add
   semimodule (Π i, f i) (Π i, g i) :=
 { add_smul := by { intros, ext1, apply add_smul },
   zero_smul := by { intros, ext1, apply zero_smul } }
+
+/-- Evaluation of functions into an indexed collection of modules at a point is a linear map. -/
+@[simps]
+def apply_linear_map (α) {r : semiring α} {m : ∀ i, add_comm_monoid $ f i}
+  [∀ i, semimodule α $ f i]
+  (i : I) : (Π i, f i) →ₗ[α] f i :=
+{ to_fun := λ g, g i,
+  map_add' := λ x y, rfl,
+  map_smul' := λ c x, rfl }
 
 end pi
