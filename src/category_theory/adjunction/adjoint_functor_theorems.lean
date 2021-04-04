@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Bhavik Mehta
 -/
 import category_theory.adjunction.basic
+import category_theory.limits.shapes.wide_equalizers
 import category_theory.limits.shapes
 import category_theory.limits.preserves.basic
 import category_theory.limits.creates
@@ -12,75 +13,51 @@ import category_theory.punit
 universes v u
 
 namespace category_theory
+open limits
 
 variables {J : Type v}
 variables {C : Type u} [category.{v} C]
 
-open category limits
-
-section
-
-/-- The type of objects for the diagram indexing a wide (co)equalizer. -/
-@[derive decidable_eq, derive inhabited] inductive walking_parallel_chunk (J : Type v) : Type v
-| zero : walking_parallel_chunk
-| one : walking_parallel_chunk
-
-open walking_parallel_chunk
-
-/-- The type family of morphisms for the diagram indexing a wide (co)equalizer. -/
-@[derive decidable_eq] inductive walking_parallel_chunk.hom (J : Type v) :
-  walking_parallel_chunk J → walking_parallel_chunk J → Type v
-| id : Π X : walking_parallel_chunk.{v} J, walking_parallel_chunk.hom X X
-| line : Π (j : J), walking_parallel_chunk.hom zero one
-
-open walking_parallel_chunk.hom
-
-/-- Composition of morphisms in the indexing diagram for wide (co)equalizers. -/
-def walking_parallel_chunk.hom.comp :
-  Π (X Y Z : walking_parallel_chunk J)
-    (f : walking_parallel_chunk.hom J X Y) (g : walking_parallel_chunk.hom J Y Z),
-    walking_parallel_chunk.hom J X Z
-  | _ _ _ (id _)   h := h
-  | _ _ _ (line j) (id one) := line j.
-
-local attribute [tidy] tactic.case_bash
-
-instance walking_parallel_pair.hom.category  :
-  small_category (walking_parallel_chunk J) :=
-{ hom  := walking_parallel_chunk.hom J,
-  id   := walking_parallel_chunk.hom.id,
-  comp := walking_parallel_chunk.hom.comp }
-
-@[simp]
-lemma walking_parallel_chunk.hom_id (X : walking_parallel_chunk J) :
-  walking_parallel_chunk.hom.id X = 𝟙 X :=
-rfl
+open limits.walking_parallel_chunk
 
 /--
-`parallel_chunk f` is the diagram in `C` consisting of the family of morphisms, each with
-common domain and codomain.
+If `C` has (small) products and a small weakly initial set of objects, then it has a weakly initial
+object.
 -/
-def parallel_chunk {X Y : C} (f : J → (X ⟶ Y)) : walking_parallel_chunk J ⥤ C :=
-{ obj := λ x, walking_parallel_chunk.cases_on x X Y,
-  map := λ x y h, match x, y, h with
-  | _, _, (id _) := 𝟙 _
-  | _, _, (line j) := f j
-  end,
-  map_comp' :=
-  begin
-    rintro _ _ _ ⟨⟩ ⟨⟩;
-    { unfold_aux, simp; refl },
-  end }
+lemma has_weakly_initial_of_weakly_initial_set_and_has_products (C : Type u) [category.{v} C]
+  [has_products C]
+  {ι : Type v} (B : ι → C) (hB : ∀ (A : C), ∃ i, nonempty (B i ⟶ A)) :
+  ∃ (T : C), ∀ X, nonempty (T ⟶ X) :=
+⟨∏ B, λ X, ⟨pi.π _ _ ≫ (hB X).some_spec.some⟩⟩
 
-lemma trident.is_limit.hom_ext {X Y : C} (f : J → (X ⟶ Y)) {s : cone (parallel_chunk f)}
-  (hs : is_limit s) {W : C}
-  {k l : W ⟶ s.X}
-  (h : k ≫ fork.ι s = l ≫ fork.ι s) : k = l :=
-hs.hom_ext $ fork.equalizer_ext _ h
+/--
+If `C` has (small) limits and a weakly initial object, then it has an initial object.
 
+The initial object is constructed as the wide equalizer of all endomorphisms on the given weakly
+initial object.
+-/
+lemma has_initial_of_weakly_initial_and_has_wide_equalizers (C : Type u) [category.{v} C]
+  [has_limits C] (T : C) (hT : ∀ X, nonempty (T ⟶ X)) :
+  has_initial C :=
+begin
+  let endos := T ⟶ T,
+  let i := wide_equalizer.ι (id : endos → endos),
+  haveI : nonempty endos := ⟨𝟙 _⟩,
+  have : ∀ (X : C), unique (wide_equalizer (id : endos → endos) ⟶ X),
+  { intro X,
+    refine ⟨⟨i ≫ classical.choice (hT X)⟩, λ a, _⟩,
+    let E := equalizer a (i ≫ classical.choice (hT _)),
+    let e : E ⟶ wide_equalizer id := equalizer.ι _ _,
+    let h : T ⟶ E := classical.choice (hT E),
+    have : ((i ≫ h) ≫ e) ≫ i = i ≫ 𝟙 _,
+    { rw [category.assoc, category.assoc],
+      apply wide_equalizer.condition (id : endos → endos) (h ≫ e ≫ i) },
+    rw [category.comp_id, cancel_mono_id i] at this,
+    haveI : split_epi e := ⟨i ≫ h, this⟩,
+    rw ←cancel_epi e,
+    apply equalizer.condition },
+  exactI has_initial_of_unique (wide_equalizer (id : endos → endos)),
 end
-
-open walking_parallel_chunk
 
 /--
 If `C` has (small) limits and a small weakly initial set of objects, then it has an initial object.
@@ -89,40 +66,27 @@ lemma has_initial_of_weakly_initial_and_has_limits (C : Type u) [category.{v} C]
   {ι : Type v} (B : ι → C) (weakly_initial : ∀ (A : C), ∃ i, nonempty (B i ⟶ A)) :
   has_initial C :=
 begin
-  have fromP : Π (X : C), (∏ B ⟶ X),
-  { intro X,
-    exact pi.π _ (weakly_initial X).some ≫ (weakly_initial X).some_spec.some },
-  let endos := ∏ B ⟶ ∏ B,
-  let F : walking_parallel_chunk endos ⥤ C := parallel_chunk (id : endos → endos),
-  let i : limit F ⟶ ∏ B := limit.π F zero,
-  have : mono i,
-  { refine ⟨λ T f g eq, _⟩,
-    apply limit.hom_ext,
-    rintro (_ | _),
-    apply eq,
-    rw ← limit.w _ (_ : zero ⟶ one),
-    rw reassoc_of eq,
-    apply hom.line (𝟙 _) },
-  have : ∀ (X : C), inhabited (limit F ⟶ X),
-    intro X,
-    refine ⟨i ≫ fromP X⟩,
-  resetI,
-  have : ∀ (X : C), unique (limit F ⟶ X),
-    intro X,
-    refine ⟨by apply_instance, λ a, _⟩,
-    let E := equalizer a (default (limit F ⟶ X)),
-    let e : E ⟶ limit F := equalizer.ι _ _,
-    let h : ∏ B ⟶ E := fromP _,
-    have : ((i ≫ h) ≫ e) ≫ i = i ≫ 𝟙 _,
-      rw category.assoc,
-      rw category.assoc,
-      erw limit.w F (hom.line (h ≫ e ≫ i)),
-      erw limit.w F (hom.line (𝟙 _)),
-    rw [category.comp_id, cancel_mono_id i] at this,
-    haveI : split_epi e := ⟨i ≫ h, this⟩,
-    rw ← cancel_epi e,
-    apply equalizer.condition,
-  exactI has_initial_of_unique (limit F),
+  -- have fromP : Π (X : C), (∏ B ⟶ X),
+  -- { intro X,
+  --   exact pi.π _ (weakly_initial X).some ≫ (weakly_initial X).some_spec.some },
+  -- let endos := ∏ B ⟶ ∏ B,
+  -- let i := wide_equalizer.ι (id : endos → endos),
+  -- haveI : nonempty endos := ⟨𝟙 _⟩,
+  -- haveI : ∀ (X : C), inhabited (wide_equalizer id ⟶ X) := λ X, ⟨i ≫ fromP X⟩,
+  -- have : ∀ (X : C), unique (wide_equalizer (id : endos → endos) ⟶ X),
+  -- { intro X,
+  --   refine ⟨by apply_instance, λ a, _⟩,
+  --   let E := equalizer a (default (wide_equalizer id ⟶ X)),
+  --   let e : E ⟶ wide_equalizer id := equalizer.ι _ _,
+  --   let h : ∏ B ⟶ E := fromP _,
+  --   have : ((i ≫ h) ≫ e) ≫ i = i ≫ 𝟙 _,
+  --   { rw [category.assoc, category.assoc],
+  --     apply wide_equalizer.condition (id : endos → endos) (h ≫ e ≫ i) },
+  --   rw [category.comp_id, cancel_mono_id i] at this,
+  --   haveI : split_epi e := ⟨i ≫ h, this⟩,
+  --   rw ← cancel_epi e,
+  --   apply equalizer.condition },
+  -- exactI has_initial_of_unique (wide_equalizer (id : endos → endos)),
 end
 
 /--

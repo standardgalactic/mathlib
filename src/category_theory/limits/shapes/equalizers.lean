@@ -173,14 +173,8 @@ by rw [←s.w right, parallel_pair_map_right]
 def fork.of_ι {P : C} (ι : P ⟶ X) (w : ι ≫ f = ι ≫ g) : fork f g :=
 { X := P,
   π :=
-  { app := λ X, begin cases X, exact ι, exact ι ≫ f, end,
-    naturality' := λ X Y f,
-    begin
-      cases X; cases Y; cases f; dsimp; simp,
-      { dsimp, simp, }, -- See note [dsimp, simp].
-      { exact w },
-      { dsimp, simp, },
-    end } }
+  { app := λ X, walking_parallel_pair.cases_on X ι (ι ≫ f),
+    naturality' := λ i j f, by cases f; dsimp; simp [w] } } -- See note [dsimp, simp]
 
 /-- A cofork on `f g : X ⟶ Y` is determined by the morphism `π : Y ⟶ P` satisfying
     `f ≫ π = g ≫ π`. -/
