@@ -425,6 +425,13 @@ begin
     exact or.inl h }
 end
 
+lemma nsmul_cons {s : multiset α} (n : ℕ) (a : α) : n • (a ::ₘ s) = n • (a ::ₘ 0) + n • s :=
+begin
+  induction n with n ih,
+  { simp only [add_zero, zero_nsmul] },
+  { simp only [succ_nsmul, one_nsmul, ih, nsmul_add, add_cons, ←singleton_add a s] }
+end
+
 /-! ### Cardinality -/
 
 /-- The cardinality of a multiset is the sum of the multiplicities
