@@ -254,6 +254,16 @@ quot.rec_on_subsingleton (@univ α _).1
 theorem exists_equiv_fin (α) [fintype α] : ∃ n, nonempty (α ≃ fin n) :=
 by haveI := classical.dec_eq α; exact ⟨card α, (equiv_fin α).nonempty⟩
 
+def fintype.equiv_fin_of_card_eq {ι : Type*} [fintype ι] [decidable_eq ι]
+  {n : ℕ} (h : fintype.card ι = n) :
+  trunc (ι ≃ fin n) :=
+(fintype.equiv_fin ι).map (λ e, e.trans (fin.cast h).to_equiv)
+
+noncomputable def fintype.equiv_fin_of_card_eq' {ι : Type*} [fintype ι]
+  {n : ℕ} (h : fintype.card ι = n) :
+  ι ≃ fin n :=
+by { letI := classical.dec_eq ι, exact (fintype.equiv_fin_of_card_eq h).out }
+
 instance (α : Type*) : subsingleton (fintype α) :=
 ⟨λ ⟨s₁, h₁⟩ ⟨s₂, h₂⟩, by congr; simp [finset.ext_iff, h₁, h₂]⟩
 
