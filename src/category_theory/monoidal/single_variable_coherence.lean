@@ -151,10 +151,11 @@ lemma hom₀.subsingleton {u v} (s s' : hom₀ u v) (hs : s.is_directed) (hs' : 
   s = s' :=
 eq_of_heq (s.subsingleton_aux s' rfl rfl hs hs')
 
-def id_tensor_path (w : word₀) :
+def id_tensor_path (w) :
   ∀ {u v}, as_quiver.path u v → as_quiver.path (w □ u) (w □ v)
 | _ _ quiver.path.nil := quiver.path.nil
-| u v (quiver.path.cons t (h : hom₀ w _)) := quiver.path.cons (id_tensor_path _ t) (hom₀.id_tensor _ h)
+| u v (quiver.path.cons t h) := quiver.path.cons (id_tensor_path t) (hom₀.id_tensor w h)
+using_well_founded {rel_tac := λ _ _, `[exact ⟨_, measure_wf (λ t, quiver.path.length t.2.2)⟩]}
 
 def canonical : ∀ (u : word₀), as_quiver.path u (special u.length)
 | blank := quiver.path.nil
