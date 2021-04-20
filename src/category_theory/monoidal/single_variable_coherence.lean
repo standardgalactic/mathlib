@@ -6,11 +6,10 @@ import tactic
 
 open category_theory
 open category_theory.monoidal_category
+open quiver
 
 universes v v₁ v₂ v₃ u u₁ u₂ u₃
 noncomputable theory
-
-namespace category_theory
 
 variables {C : Type u₁} [category.{v₁} C] [monoidal_category C]
 
@@ -20,6 +19,10 @@ inductive word₀
 
 open word₀
 infixr ` □ `:80 := concat
+
+def word₀.interpret (x : C) : word₀ → C
+| blank := x
+| (u □ v) := u.interpret ⊗ v.interpret
 
 @[simp]
 lemma concat_ne_right : ∀ {u v : word₀}, u □ v ≠ v
@@ -40,6 +43,12 @@ inductive hom₀ : word₀ → word₀ → Sort*
 | tensor_id : ∀ {u v} (w), hom₀ u v → hom₀ (u □ w) (v □ w)
 | id_tensor : ∀ (u) {v w}, hom₀ v w → hom₀ (u □ v) (u □ w)
 
+def hom₀.interpret (x : C) : ∀ {u v}, hom₀ u v → (u.interpret x ⟶ v.interpret x)
+| _ _ (hom₀.α_hom u v w) := (α_ _ _ _).hom
+| _ _ (hom₀.α_inv u v w) := (α_ _ _ _).inv
+| _ _ (hom₀.tensor_id w s) := s.interpret ⊗ 𝟙 _
+| _ _ (hom₀.id_tensor w s) := 𝟙 _ ⊗ s.interpret
+
 lemma hom₀.ne {u v} (s : hom₀ u v) : u ≠ v :=
 by { induction s; simp * }
 
@@ -53,6 +62,11 @@ def word₀.length : word₀ → ℕ
 | blank := 0
 | (v □ w) := v.length + w.length + 1
 
+@[simp]
+lemma special_length : ∀ n, (special n).length = n
+| 0 := by simp
+| (n+1) := by simp [special_length n]
+
 @[simp] lemma word₀.length_eq_zero_iff : ∀ (u : word₀), u.length = 0 ↔ u = blank
 | blank := by simp
 | (u □ v) := by simp
@@ -65,7 +79,6 @@ def word₀.length : word₀ → ℕ
 def word₀.rank : word₀ → ℕ
 | blank := 0
 | (v □ w) := v.rank + w.rank + v.length
-
 
 lemma hom₀.same_length : ∀ {u v : word₀} (s : hom₀ u v), u.length = v.length
 | _ _ (hom₀.α_hom u v w) := by { dsimp, linarith }
@@ -125,6 +138,7 @@ def hom₀.is_directed.rank_lt_rank : ∀ {u v : word₀} {s : hom₀ u v}, s.is
     by { dsimp at hs, simpa [s.same_length] using hs.rank_lt_rank }
 
 def as_quiver : quiver word₀ := ⟨hom₀⟩
+instance : has_reverse as_quiver := ⟨λ u v, hom₀.inv⟩
 
 lemma hom₀.subsingleton_aux :
   ∀ {u u' v v' : word₀} (s : hom₀ u v) (s' : hom₀ u' v') (hu : u = u') (hv : v = v'),
@@ -153,18 +167,42 @@ eq_of_heq (s.subsingleton_aux s' rfl rfl hs hs')
 
 def id_tensor_path (w) :
   ∀ {u v}, as_quiver.path u v → as_quiver.path (w □ u) (w □ v)
-| _ _ quiver.path.nil := quiver.path.nil
-| u v (quiver.path.cons t h) := quiver.path.cons (id_tensor_path t) (hom₀.id_tensor w h)
+| _ _ path.nil := path.nil
+| u v (path.cons t h) := path.cons (id_tensor_path t) (hom₀.id_tensor w h)
 using_well_founded {rel_tac := λ _ _, `[exact ⟨_, measure_wf (λ t, quiver.path.length t.2.2)⟩]}
 
-def canonical : ∀ (u : word₀), as_quiver.path u (special u.length)
-| blank := quiver.path.nil
-| ((u □ v) □ w) := quiver.path.comp (quiver.arrow.to_path (hom₀.α_hom _ _ _)) sorry
-| (blank □ u) :=
-  begin
-    change as_quiver.path _ (blank □ special (0 + u.length)),
+def tensor_id_path (w) :
+  ∀ {u v}, as_quiver.path u v → as_quiver.path (u □ w) (v □ w)
+| _ _ path.nil := path.nil
+| u v (path.cons t h) := path.cons (tensor_id_path t) (hom₀.tensor_id w h)
+using_well_founded {rel_tac := λ _ _, `[exact ⟨_, measure_wf (λ t, quiver.path.length t.2.2)⟩]}
 
-  end
+lemma ends_of_path {u : word₀} : ∀ {v}, as_quiver.path u v → u.length = v.length
+| _ path.nil := rfl
+| _ (path.cons h (t : hom₀ _ _)) := by rw [ends_of_path h, t.same_length]
+
+def path_of_eq : ∀ {m n}, m = n → as_quiver.path (special m) (special n)
+| n _ rfl := path.nil
+
+def canonical : ∀ (u : word₀), as_quiver.path u (special u.length)
+| blank := path.nil
+| ((u □ v) □ w) :=
+  path.comp
+    (arrow.to_path (hom₀.α_hom _ _ _))
+    (path.comp (canonical (u □ v □ w))
+               (path_of_eq (by { simp, linarith })))
+| (blank □ u) := id_tensor_path blank (path.comp (canonical u) (path_of_eq (by simp)))
+using_well_founded {rel_tac := λ _ _, `[exact ⟨_, measure_wf (λ t, word₀.rank t + word₀.length t)⟩]}
+
+def exists_path {u v : word₀} (h : u.length = v.length) : as_quiver.path u v :=
+((canonical u).comp (path_of_eq h)).comp (canonical v).reverse
+
+  -- quiver.path.comp (quiver.arrow.to_path (hom₀.α_hom _ _ _)) sorry
+-- | (blank □ u) :=
+--   begin
+--     change as_quiver.path _ (blank □ special (0 + u.length)),
+
+--   end
 
 -- inductive path {V} (G : quiver.{v u} V) (a : V) : V → Sort (max (u+1) v)
 -- | nil  : path a
@@ -177,7 +215,4 @@ def canonical : ∀ (u : word₀), as_quiver.path u (special u.length)
 -- | _ _ (hom₀.tensor_id _ s) := s.is_directed
 -- | _ _ (hom₀.id_tensor _ s) := s.is_directed
 
-#reduce special 8
-
-
-end category_theory
+-- #reduce special 8
