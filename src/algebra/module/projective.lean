@@ -7,6 +7,9 @@ Authors: Kevin Buzzard
 import algebra.module.basic
 import linear_algebra.finsupp
 import linear_algebra.basis
+import category_theory.abelian.projective
+import algebra.category.Module.projective
+import algebra.category.Module.epi_mono
 
 /-!
 
@@ -126,6 +129,37 @@ begin
     use finsupp.single p 1,
     simp },
 end
+
+open category_theory
+open_locale Module
+local attribute [instance] semimodule.add_comm_monoid_to_add_comm_group
+
+theorem iff_projective {R : Type v} [ring R]
+  {P : Type v} [add_comm_group P] [module R P] :
+  is_projective R P ↔ projective (Module.of R P) :=
+⟨λ h, { factors := λ E X f e epi, begin apply h.lifting_property, apply (Module.epi_iff_surjective _).mp epi, end, },
+  λ h, of_lifting_property (λ E X mE mX sE sX f g s,
+  begin
+    resetI,
+    letI : module R X := {..sX},
+    letI : module R E := {..sE},
+    fsplit,
+    convert @projective.factor_thru _ _ (Module.of R P) (Module.of R X) (Module.of R E) h (Module.as_hom {..g}) (Module.as_hom {..f}) ((Module.epi_iff_surjective _).mpr s),
+    unfreezingI { cases mE, }, congr,
+    unfreezingI { cases sE, }, dsimp [Module.of, _inst_1], congr,
+    unfreezingI { cases mE, }, congr,
+    convert @projective.factor_thru_comp _ _ (Module.of R P) (Module.of R X) (Module.of R E) h (Module.as_hom {..g}) (Module.as_hom {..f}) ((Module.epi_iff_surjective _).mpr s),
+    unfreezingI { cases mX, }, congr,
+    unfreezingI { cases sX, }, dsimp [Module.of, _inst_1], congr,
+    unfreezingI { cases mX, }, congr,
+    unfreezingI { cases mE, }, congr,
+    unfreezingI { cases mX, }, congr,
+    unfreezingI { cases sE, }, dsimp [Module.of, _inst_1], congr,
+    unfreezingI { cases mE, }, congr,
+    unfreezingI { cases sX, }, dsimp [Module.of, _inst_1], congr,
+    unfreezingI { cases mX, }, congr,
+    { cases f, congr, simp, },
+  end)⟩
 
 end semiring
 

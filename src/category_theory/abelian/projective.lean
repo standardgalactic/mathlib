@@ -63,6 +63,16 @@ end
 
 namespace projective
 
+/--
+An arbitrarily chosen factorisation of a morphism out of a projective object through an epimorphism.
+-/
+def factor_thru {P X E : C} [projective P] (f : P ⟶ X) (e : E ⟶ X) [epi e] : P ⟶ E :=
+(projective.factors f e).some
+
+@[simp] lemma factor_thru_comp {P X E : C} [projective P] (f : P ⟶ X) (e : E ⟶ X) [epi e] :
+  factor_thru f e ≫ e = f :=
+(projective.factors f e).some_spec
+
 lemma of_iso {P Q : C} (i : P ≅ Q) (hP : projective P) : projective Q :=
 begin
   fsplit,
