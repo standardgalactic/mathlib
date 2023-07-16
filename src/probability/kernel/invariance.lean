@@ -8,6 +8,9 @@ import probability.kernel.composition
 /-!
 # Invariance of measures along a kernel
 
+> THIS FILE IS SYNCHRONIZED WITH MATHLIB4.
+> Any changes to this file require a corresponding PR to mathlib4.
+
 We define the push-forward of a measure along a kernel which results in another measure. In the
 case that the push-forward measure is the same as the original measure, we say that the measure is
 invariant with respect to the kernel.
