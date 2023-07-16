@@ -10,6 +10,9 @@ import analysis.normed_space.finite_dimension
 /-!
 # Higher differentiability of usual operations
 
+> THIS FILE IS SYNCHRONIZED WITH MATHLIB4.
+> Any changes to this file require a corresponding PR to mathlib4.
+
 We prove that the usual operations (addition, multiplication, difference, composition, and
 so on) preserve `C^n` functions. We also expand the API aound `C^n` functions.
 
